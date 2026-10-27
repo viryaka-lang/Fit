@@ -1,0 +1,27 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Figure sheet</title>
+<link rel="stylesheet" href="../css/app.css">
+<style>
+body{padding:12px;background:var(--bg)}
+.grid{display:grid;grid-template-columns:repeat(var(--cols,4),1fr);gap:8px}
+.cell{background:var(--surface);border-radius:12px;padding:6px;color:var(--text);font:12px system-ui}
+.cell .figure{width:100%;height:auto;display:block}
+.pair{display:grid;grid-template-columns:1fr 1fr}
+</style></head><body>
+<div class="grid" id="g"></div>
+<script type="module">
+import { EXERCISES } from '../js/data/exercises.js';
+import { mountFigure } from '../js/figure.js';
+const params = new URLSearchParams(location.search);
+const only = params.get('ex'); if (params.get('cols')) document.body.style.setProperty('--cols', params.get('cols'));
+const g = document.getElementById('g');
+for (const ex of EXERCISES) {
+  if (only && !only.split(',').includes(ex.id)) continue;
+  const c = document.createElement('div'); c.className='cell';
+  c.innerHTML = `<b>${ex.id}</b><div class="pair"><div></div><div></div></div><div class="st"></div>`;
+  g.appendChild(c);
+  const [a,b] = c.querySelectorAll('.pair > div');
+  mountFigure(a, {...ex, fig:{...ex.fig, p1: ex.fig.p0}}, {mode:'static'});
+  mountFigure(b, {...ex, fig:{...ex.fig, p0: ex.fig.p1}}, {mode:'static'});
+}
+</script></body></html>

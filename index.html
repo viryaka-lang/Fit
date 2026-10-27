@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Hypertrophy — Dumbbell & Bench Training</title>
+  <meta name="description" content="Science-based hypertrophy training with just an adjustable bench and dumbbells. Guided workouts, automatic progression and progress tracking.">
+  <meta name="theme-color" content="#0c0e12" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f3f4f7" media="(prefers-color-scheme: light)">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Hypertrophy">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+  <script>
+    // apply theme before first paint
+    try {
+      const t = JSON.parse(localStorage.getItem('hypertrophy.v1') || '{}').settings?.theme;
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    } catch {}
+  </script>
+</head>
+<body>
+  <div id="app">
+    <main id="view" tabindex="-1"></main>
+    <nav class="tabbar" aria-label="Main">
+      <a href="#/today" data-tab="today"><span class="tab-ic"></span><span>Today</span></a>
+      <a href="#/plan" data-tab="plan"><span class="tab-ic"></span><span>Plan</span></a>
+      <a href="#/progress" data-tab="progress"><span class="tab-ic"></span><span>Progress</span></a>
+      <a href="#/library" data-tab="library"><span class="tab-ic"></span><span>Exercises</span></a>
+    </nav>
+  </div>
+  <noscript>This app needs JavaScript enabled.</noscript>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
