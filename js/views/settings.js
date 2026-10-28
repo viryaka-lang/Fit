@@ -70,7 +70,7 @@ export function renderSettings(root, _p, { refresh, install, applyTheme, navigat
         </div>
         <button class="btn danger-ghost" data-act="reset">${icon('trash')}Erase all data</button>
       </section>
-      <p class="disclaimer">Hypertrophy v1.0 · Works offline. Educational guidance, not medical advice.</p>
+      <p class="disclaimer">Hypertrophy v1.1 · Works offline. Educational guidance, not medical advice.</p>
     </div>`;
 
   root.addEventListener('click', async (e) => {

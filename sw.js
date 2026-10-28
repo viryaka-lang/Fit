@@ -1,6 +1,6 @@
 // Offline-first service worker: precache the app shell, serve from cache,
 // refresh in the background. Bump VERSION whenever files change.
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const CACHE = `hypertrophy-${VERSION}`;
 const ASSETS = [
   './',

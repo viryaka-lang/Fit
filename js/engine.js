@@ -164,8 +164,15 @@ export function sessionStats(session, allSessions) {
     const val = EX[e.exId].bodyweight && !b.w ? b.r : b.v;
     if (prevBest > 0 && val > prevBest + 1e-6) prs.push({ exId: e.exId, w: b.w, r: b.r });
   }
-  const dur = session.end ? Math.max(1, Math.round((new Date(session.end) - new Date(session.date)) / 60000)) : 0;
+  const dur = session.end ? Math.max(1, Math.round((new Date(session.end) - new Date(session.date) - (session.pausedMs || 0)) / 60000)) : 0;
   return { sets, volume, reps, prs, muscles, minutes: dur };
+}
+
+// Active training time of a workout in ms, excluding time spent paused.
+export function elapsedMs(w, now = Date.now()) {
+  const end = w.end ? new Date(w.end).getTime() : now;
+  const paused = (w.pausedMs || 0) + (w.pausedAt ? end - w.pausedAt : 0);
+  return Math.max(0, end - new Date(w.date).getTime() - paused);
 }
 
 export function addMuscles(acc, exId, n) {

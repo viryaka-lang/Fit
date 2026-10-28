@@ -36,7 +36,7 @@ export function renderToday(root, _p, { navigate, install }) {
       ${a ? `
       <button class="resume card" data-act="resume">
         <span class="pulse"></span>
-        <span class="grow"><b>Workout in progress</b><small>${esc(a.name)} · ${a.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0)} sets logged</small></span>
+        <span class="grow"><b>${a.pausedAt ? 'Workout paused' : 'Workout in progress'}</b><small>${esc(a.name)} · ${a.exercises.reduce((n, e) => n + e.sets.filter((s) => s.done).length, 0)} sets logged</small></span>
         <span class="btn sm primary">Resume${icon('right')}</span>
       </button>` : ''}
 

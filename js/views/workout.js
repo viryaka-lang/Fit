@@ -1,7 +1,7 @@
 import * as store from '../store.js';
 import { EX, MUSCLES } from '../data/exercises.js';
 import { PROGRAM, MESO } from '../data/programs.js';
-import { planWorkout, position, suggest, fmtW, toKg, fromKg, round, doneSets, slotKey } from '../engine.js';
+import { planWorkout, position, suggest, fmtW, toKg, fromKg, round, doneSets, slotKey, elapsedMs } from '../engine.js';
 import { esc, icon, toast, haptic, fmtTime, hydrateFigures, destroyFigures, sheet, confirmDialog } from '../ui.js';
 import { openExercise, pickAlternative, repStr, restStr } from './shared.js';
 import { beep, notify, unlockAudio, keepAwake } from '../timer.js';
@@ -37,9 +37,11 @@ export function startWorkout(workoutId, navigate) {
 function finish(navigate) {
   const st = store.get();
   const a = st.active;
-  const session = { ...a, end: new Date().toISOString() };
+  const now = Date.now();
+  const session = { ...a, end: new Date(now).toISOString(), pausedMs: (a.pausedMs || 0) + (a.pausedAt ? now - a.pausedAt : 0) };
   delete session.cur;
   delete session.rest;
+  delete session.pausedAt;
   session.exercises = session.exercises
     .map((e) => ({ ...e, sets: e.sets.filter((x) => x.done) }))
     .filter((e) => e.sets.length);
@@ -69,8 +71,9 @@ export function renderWorkout(root, _params, { navigate }) {
   const incDisp = round(fromKg(st().settings.incKg, u), 0.25) || (u === 'kg' ? 2 : 5);
   let tick = null, restTimeout = null;
 
-  keepAwake(true);
-  const onVis = () => { if (document.visibilityState === 'visible') { keepAwake(true); paintRest(); } };
+  const paused = () => !!A()?.pausedAt;
+  if (!paused()) keepAwake(true);
+  const onVis = () => { if (document.visibilityState === 'visible') { if (!paused()) keepAwake(true); paintRest(); } };
   document.addEventListener('visibilitychange', onVis);
 
   root.innerHTML = `
@@ -78,6 +81,7 @@ export function renderWorkout(root, _params, { navigate }) {
       <header class="wk-top">
         <button class="icon-btn" data-act="minimize" aria-label="Back to Today">${icon('down')}</button>
         <div class="wk-title"><b>${esc(A().name)}</b><span class="wk-clock" aria-label="Elapsed time">0:00</span></div>
+        <button class="icon-btn" data-act="pause" aria-label="Pause workout">${icon('pause')}</button>
         <button class="btn sm primary" data-act="finish">Finish</button>
       </header>
       <div class="wk-strip" role="tablist" aria-label="Exercises"></div>
@@ -93,12 +97,29 @@ export function renderWorkout(root, _params, { navigate }) {
           </div>
         </div>
       </div>
+      <div class="paused" role="dialog" aria-modal="true" aria-labelledby="paused-title" hidden>
+        <div class="paused-card">
+          <span class="paused-ic">${icon('pause')}</span>
+          <h2 id="paused-title">Workout paused</h2>
+          <p class="muted">Timers are stopped. Paused time doesn't count toward your workout duration.</p>
+          <div class="paused-stats">
+            <div><b class="paused-elapsed">0:00</b><span>training time</span></div>
+            <div class="paused-rest-box" hidden><b class="paused-rest">0:00</b><span>rest left</span></div>
+          </div>
+          <button class="btn primary lg block" data-act="resume">${icon('play')}Resume</button>
+          <div class="row gap">
+            <button class="btn ghost grow" data-act="minimize">Back to Today</button>
+            <button class="btn ghost grow" data-act="finish">Finish</button>
+          </div>
+        </div>
+      </div>
     </div>`;
 
   const strip = root.querySelector('.wk-strip');
   const main = root.querySelector('.wk-main');
   const restEl = root.querySelector('.rest');
   const clock = root.querySelector('.wk-clock');
+  const pauseEl = root.querySelector('.paused');
 
   // ---------------------------------------------------------- strip
   function paintStrip() {
@@ -217,12 +238,12 @@ export function renderWorkout(root, _params, { navigate }) {
   function scheduleRestAlert() {
     clearTimeout(restTimeout);
     const r = A()?.rest;
-    if (!r) return;
+    if (!r || paused()) return;
     restTimeout = setTimeout(restDone, Math.max(0, r.end - Date.now()));
   }
   function restDone() {
     const s = st();
-    if (!s.active?.rest) return;
+    if (!s.active?.rest || s.active.pausedAt) return;
     store.update((x) => { x.active.rest = null; });
     if (s.settings.sound) beep();
     if (s.settings.vibrate) haptic([220, 120, 220]);
@@ -232,13 +253,47 @@ export function renderWorkout(root, _params, { navigate }) {
   function paintRest() {
     const r = A()?.rest;
     if (!r) { restEl.hidden = true; document.body.classList.remove('resting'); return; }
-    const left = (r.end - Date.now()) / 1000;
-    if (left <= 0) { restDone(); return; }
+    const left = (paused() ? r.left : r.end - Date.now()) / 1000;
+    if (left <= 0 && !paused()) { restDone(); return; }
     restEl.hidden = false;
     document.body.classList.add('resting');
     restEl.querySelector('.rest-time').textContent = fmtTime(left);
     restEl.querySelector('.rest-bar i').style.transform = `scaleX(${Math.max(0, left / r.total)})`;
     restEl.classList.toggle('ending', left <= 10);
+  }
+
+  // ----------------------------------------------------------- pause
+  function setPaused(on) {
+    const now = Date.now();
+    store.update((s) => {
+      const a = s.active;
+      if (on && !a.pausedAt) {
+        a.pausedAt = now;
+        if (a.rest) a.rest.left = Math.max(0, a.rest.end - now);
+      } else if (!on && a.pausedAt) {
+        a.pausedMs = (a.pausedMs || 0) + (now - a.pausedAt);
+        a.pausedAt = null;
+        if (a.rest) { a.rest.end = now + a.rest.left; delete a.rest.left; }
+      }
+    });
+    clearTimeout(restTimeout);
+    if (on) keepAwake(false);
+    else { keepAwake(true); scheduleRestAlert(); }
+    haptic(10);
+    paintPause();
+    paintRest();
+    paintClock();
+  }
+  function paintPause() {
+    const on = paused();
+    pauseEl.hidden = !on;
+    document.body.classList.toggle('wk-paused', on);
+    if (!on) return;
+    const r = A().rest;
+    pauseEl.querySelector('.paused-rest-box').hidden = !r;
+    if (r) pauseEl.querySelector('.paused-rest').textContent = fmtTime(r.left / 1000);
+    pauseEl.querySelector('.paused-elapsed').textContent = fmtTime(elapsedMs(A()) / 1000);
+    pauseEl.querySelector('[data-act=resume]').focus({ preventScroll: true });
   }
 
   // ----------------------------------------------------------- events
@@ -344,6 +399,8 @@ export function renderWorkout(root, _params, { navigate }) {
       case 'rest-skip':
         store.update((s) => { s.active.rest = null; }); clearTimeout(restTimeout); paintRest();
         break;
+      case 'pause': setPaused(true); break;
+      case 'resume': setPaused(false); break;
       case 'minimize': navigate('#/today'); break;
       case 'finish': openFinish(); break;
     }
@@ -409,16 +466,25 @@ export function renderWorkout(root, _params, { navigate }) {
   paintMain();
   scheduleRestAlert();
   paintRest();
-  const startT = new Date(A().date).getTime();
-  const paintClock = () => { clock.textContent = fmtTime((Date.now() - startT) / 1000); };
+  function paintClock() {
+    if (!A()) return;
+    const t = fmtTime(elapsedMs(A()) / 1000);
+    clock.textContent = paused() ? `Paused · ${t}` : t;
+  }
   paintClock();
-  tick = setInterval(() => { if (!A()) return; paintClock(); paintRest(); }, 250);
+  paintPause();
+  tick = setInterval(() => { if (!A() || paused()) return; paintClock(); paintRest(); }, 250);
+  const onKey = (e) => {
+    if (e.key === 'Escape' && paused() && !document.querySelector('.sheet-wrap')) setPaused(false);
+  };
+  document.addEventListener('keydown', onKey);
 
   return () => {
     clearInterval(tick);
     clearTimeout(restTimeout);
     document.removeEventListener('visibilitychange', onVis);
-    document.body.classList.remove('resting');
+    document.removeEventListener('keydown', onKey);
+    document.body.classList.remove('resting', 'wk-paused');
     keepAwake(false);
   };
 }
